@@ -3,18 +3,23 @@ const Builder = std.build.Builder;
 
 pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
+    const target = b.standardTargetOptions(.{});
 
     const test_step = b.step("test", "Test");
 
     const dylib = b.addSharedLibrary("a", null, b.version(1, 0, 0));
     dylib.setBuildMode(mode);
+    dylib.setTarget(target);
     dylib.addCSourceFile("a.c", &.{});
+    dylib.linkLibC();
     dylib.install();
 
     const exe = b.addExecutable("main", null);
     exe.setBuildMode(mode);
+    exe.setTarget(target);
     exe.addCSourceFile("main.c", &.{});
     exe.linkSystemLibrary("a");
+    exe.linkLibC();
     exe.addLibraryPath(b.pathFromRoot("zig-out/lib/"));
     exe.addRPath(b.pathFromRoot("zig-out/lib"));
 

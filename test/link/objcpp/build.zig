@@ -1,6 +1,5 @@
 const std = @import("std");
 const Builder = std.build.Builder;
-const CrossTarget = std.zig.CrossTarget;
 
 pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();

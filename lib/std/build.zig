@@ -1837,6 +1837,9 @@ pub const LibExeObjStep = struct {
         // option is supplied.
         const run_step = RunStep.create(exe.builder, exe.builder.fmt("run {s}", .{exe.step.name}));
         run_step.addArtifactArg(exe);
+        run_step.is_linking_libc = exe.is_linking_libc;
+        run_step.target = exe.target;
+        run_step.target_info = exe.target_info;
 
         if (exe.kind == .test_exe) {
             run_step.addArg(exe.builder.zig_exe);

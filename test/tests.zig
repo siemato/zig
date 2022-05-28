@@ -996,6 +996,10 @@ pub const StandaloneContext = struct {
             zig_args.append("--verbose") catch unreachable;
         }
 
+        if (b.enable_qemu) {
+            zig_args.append("-fqemu") catch unreachable;
+        }
+
         if (features.cross_targets and !self.target.isNative()) {
             const target_arg = fmt.allocPrint(b.allocator, "-Dtarget={s}", .{self.target.zigTriple(b.allocator) catch unreachable}) catch unreachable;
             zig_args.append(target_arg) catch unreachable;

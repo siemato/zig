@@ -12,6 +12,8 @@ const ArrayList = std.ArrayList;
 const EnvMap = process.EnvMap;
 const Allocator = mem.Allocator;
 const ExecError = build.Builder.ExecError;
+const CrossTarget = std.zig.CrossTarget;
+const NativeTargetInfo = std.zig.system.NativeTargetInfo;
 
 const max_stdout_size = 1 * 1024 * 1024; // 1 MiB
 
@@ -30,6 +32,10 @@ cwd: ?[]const u8,
 
 /// Override this field to modify the environment, or use setEnvironmentVariable
 env_map: ?*EnvMap,
+
+target: CrossTarget = CrossTarget{},
+target_info: ?NativeTargetInfo = null,
+is_linking_libc: bool = false,
 
 stdout_action: StdIoAction = .inherit,
 stderr_action: StdIoAction = .inherit,
@@ -145,10 +151,51 @@ fn stdIoActionToBehavior(action: StdIoAction) std.ChildProcess.StdIo {
 
 fn make(step: *Step) !void {
     const self = @fieldParentPtr(RunStep, "step", step);
+    const target_info = self.target_info orelse blk: {
+        const target_info = NativeTargetInfo.detect(self.builder.allocator, self.target) catch
+            unreachable;
+        break :blk target_info;
+    };
 
     const cwd = if (self.cwd) |cwd| self.builder.pathFromRoot(cwd) else self.builder.build_root;
 
     var argv_list = ArrayList([]const u8).init(self.builder.allocator);
+
+    const need_cross_glibc = self.target.isGnuLibC() and self.is_linking_libc;
+    switch (self.builder.host.getExternalExecutor(target_info, .{
+        .qemu_fixes_dl = need_cross_glibc and self.builder.glibc_runtimes_dir != null,
+        .link_libc = self.is_linking_libc,
+    })) {
+        .native => {},
+        .qemu => |bin_name| if (self.builder.enable_qemu) {
+            const glibc_dir_arg = if (need_cross_glibc)
+                self.builder.glibc_runtimes_dir orelse return
+            else
+                null;
+            try argv_list.append(bin_name);
+            if (glibc_dir_arg) |dir| {
+                // TODO look into making this a call to `linuxTriple`. This
+                // needs the directory to be called "i686" rather than
+                // "i386" which is why we do it manually here.
+                const fmt_str = "{s}" ++ fs.path.sep_str ++ "{s}-{s}-{s}";
+                const cpu_arch = self.target.getCpuArch();
+                const os_tag = self.target.getOsTag();
+                const abi = self.target.getAbi();
+                const cpu_arch_name: []const u8 = if (cpu_arch == .i386)
+                    "i686"
+                else
+                    @tagName(cpu_arch);
+                const full_dir = try std.fmt.allocPrint(self.builder.allocator, fmt_str, .{
+                    dir, cpu_arch_name, @tagName(os_tag), @tagName(abi),
+                });
+
+                try argv_list.append("-L");
+                try argv_list.append(full_dir);
+            }
+        } else return,
+        else => return,
+    }
+
     for (self.argv.items) |arg| {
         switch (arg) {
             .bytes => |bytes| try argv_list.append(bytes),

@@ -2,15 +2,6 @@ const std = @import("std");
 const Builder = std.build.Builder;
 const CrossTarget = std.zig.CrossTarget;
 
-fn isRunnableTarget(t: CrossTarget) bool {
-    // TODO I think we might be able to run this on Linux via Darling.
-    // Add a check for that here, and return true if Darling is available.
-    if (t.isNative() and t.getOsTag() == .macos)
-        return true
-    else
-        return false;
-}
-
 pub fn build(b: *Builder) void {
     const mode = b.standardReleaseOptions();
     const target = b.standardTargetOptions(.{});
@@ -29,8 +20,8 @@ pub fn build(b: *Builder) void {
     // populate paths to the sysroot here.
     exe.linkFramework("Foundation");
 
-    if (isRunnableTarget(target)) {
-        const run_cmd = exe.run();
-        test_step.dependOn(&run_cmd.step);
-    }
+    const run_cmd = exe.run();
+    run_cmd.expectStdOutEqual("Hello from C++ and Zig");
+
+    test_step.dependOn(&run_cmd.step);
 }
